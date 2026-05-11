@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+@theme {
+  /* ====== Brand: Deep Premium Red ====== */
+  --color-brand-50: #fef2f2;
+  --color-brand-100: #fee2e2;
+  --color-brand-200: #fecaca;
+  --color-brand-300: #fca5a5;
+  --color-brand-400: #f87171;
+  --color-brand-500: #e63946;   /* bright accent */
+  --color-brand-600: #c1121f;   /* primary */
+  --color-brand-700: #9b0e19;
+  --color-brand-800: #780000;   /* dark */
+  --color-brand-900: #5a0000;
+
+  /* ====== Vault dark surfaces (override slate-* to feel premium) ====== */
+  --color-slate-950: #0b0b0f;   /* page background */
+  --color-slate-900: #15151c;   /* card surface */
+  --color-slate-800: #1f1f2a;   /* raised surface */
+  --color-slate-700: #2a2a36;   /* border */
+  --color-slate-600: #3a3a48;
+  --color-slate-500: #6a6a78;
+  --color-slate-400: #8a8a98;   /* text muted */
+  --color-slate-300: #b8b8c7;   /* text secondary */
+  --color-slate-200: #d6d6e0;
+  --color-slate-100: #ececf2;
+  --color-slate-50:  #f6f6fa;
+
+  /* ====== Accent tokens ====== */
+  --color-gold-400: #ffd76a;
+  --color-gold-500: #f5c542;
+  --color-gold-600: #d9a82a;
+
+  --color-success-400: #4adf8d;
+  --color-success-500: #2ecc71;
+  --color-success-600: #1da354;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body {
+  background: #0b0b0f;
+  color: #ececf2;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ====== Premium red gradients used across the app ====== */
+.bg-vault-gradient {
+  background:
+    radial-gradient(80% 60% at 50% 0%, rgba(193, 18, 31, 0.25), transparent 70%),
+    radial-gradient(60% 50% at 100% 100%, rgba(120, 0, 0, 0.35), transparent 70%),
+    #0b0b0f;
+}
+
+.bg-hero-gradient {
+  background:
+    radial-gradient(60% 60% at 70% 30%, rgba(230, 57, 70, 0.35), transparent 70%),
+    radial-gradient(50% 50% at 30% 80%, rgba(120, 0, 0, 0.4), transparent 70%),
+    linear-gradient(180deg, #15151c 0%, #0b0b0f 100%);
+}
+
+.bg-red-glow {
+  background: radial-gradient(circle at center, rgba(230, 57, 70, 0.18), transparent 65%);
+}
+
+/* Premium primary button gradient */
+.btn-vault-primary {
+  background: linear-gradient(135deg, #e63946 0%, #c1121f 60%, #780000 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 10px 24px -8px rgba(193, 18, 31, 0.5);
+  transition: filter 200ms, box-shadow 200ms, transform 100ms;
+}
+.btn-vault-primary:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 14px 32px -8px rgba(193, 18, 31, 0.65);
+}
+.btn-vault-primary:active {
+  transform: translateY(1px);
+}
+
+/* Soft glass surface for stat cards / panels */
+.surface-glass {
+  background: linear-gradient(180deg, rgba(31, 31, 42, 0.7) 0%, rgba(21, 21, 28, 0.7) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+/* Subtle red ring used for active states / highlights */
+.ring-vault {
+  box-shadow:
+    0 0 0 1px rgba(230, 57, 70, 0.45),
+    0 0 24px -4px rgba(230, 57, 70, 0.35);
+}
+
+/* Card lift hover (use on TradingCardItem etc.) */
+.card-lift {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: rgba(230, 57, 70, 0.3);
+  box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+}
+
+/* Hide scrollbars utility for chip rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Loading shimmer skeleton */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(31, 31, 42, 1) 0%,
+    rgba(42, 42, 54, 1) 50%,
+    rgba(31, 31, 42, 1) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}

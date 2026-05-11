@@ -1,0 +1,385 @@
+// GemVault — One Piece TCG community platform
+// Schema is split into: Users, Cards, Collection, Selling, Buying, Messaging, Moderation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum CardCondition {
+  MINT
+  NEAR_MINT
+  EXCELLENT
+  GOOD
+  PLAYED
+  POOR
+}
+
+enum CardLanguage {
+  EN
+  JP
+  ZH
+  KR
+}
+
+enum SellMode {
+  COLLECTION
+  OPEN_TO_OFFERS
+  LISTED_FOR_SALE
+}
+
+enum ListingStatus {
+  ACTIVE
+  RESERVED
+  SOLD
+  CANCELLED
+  EXPIRED
+}
+
+enum BuyRequestStatus {
+  ACTIVE
+  FULFILLED
+  CANCELLED
+  EXPIRED
+}
+
+enum ShippingPreference {
+  SHIPPING_ONLY
+  MEETUP_ONLY
+  BOTH
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportTargetType {
+  USER
+  LISTING
+  BUY_REQUEST
+  MESSAGE
+  CARD
+}
+
+// ============================================================
+// USERS / PROFILES
+// Linked to Supabase auth.users via userId
+// ============================================================
+
+model Profile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique // Supabase auth.users.id
+  email              String             @unique
+  username           String             @unique
+  displayName        String?
+  avatarUrl          String?
+  bio                String?
+
+  // Location (city/state level only — never exact address)
+  city               String?
+  state              String?
+  country            String?            @default("Malaysia")
+
+  // Roles & trust
+  role               UserRole           @default(USER)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  rating             Float?
+  totalSales         Int                @default(0)
+  totalPurchases     Int                @default(0)
+
+  // Future KYC integration hooks
+  kycProvider        String?
+  kycReference       String?
+  kycVerifiedAt      DateTime?
+
+  // Status
+  isBanned           Boolean            @default(false)
+  banReason          String?
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  userCards             UserCard[]
+  saleListings          SaleListing[]
+  sellPreferences       SellPreference[]
+  buyRequests           BuyRequest[]
+  conversationsAsBuyer  Conversation[]   @relation("ConversationBuyer")
+  conversationsAsSeller Conversation[]   @relation("ConversationSeller")
+  messages              Message[]
+  reportsMade           Report[]         @relation("Reporter")
+  reportsReceived       Report[]         @relation("ReportedUser")
+
+  @@index([username])
+  @@index([city, state])
+  @@index([role])
+}
+
+// ============================================================
+// CARD MASTER DATA
+// ============================================================
+
+model CardSet {
+  id          String    @id @default(cuid())
+  code        String    @unique // OP01, OP02, ST01, etc.
+  name        String
+  description String?
+  releaseDate DateTime?
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  cards Card[]
+
+  @@index([code])
+}
+
+model Card {
+  id        String  @id @default(cuid())
+  cardCode  String  @unique // e.g. OP01-001
+  name      String
+  setId     String
+  set       CardSet @relation(fields: [setId], references: [id])
+
+  rarity    String  // C, UC, R, SR, SEC, L, P
+  cardType  String  // LEADER, CHARACTER, EVENT, STAGE
+  colors    String[] // ["Red"], ["Red","Green"]
+  cost      Int?
+  power     Int?
+  counter   Int?
+  life      Int?
+  attribute String?  // Slash, Strike, Ranged, Special, Wisdom
+
+  effectText  String?
+  triggerText String?
+  imageUrl    String?
+
+  // Variant flags
+  isAlternateArt Boolean        @default(false)
+  isParallel     Boolean        @default(false)
+  isPromo        Boolean        @default(false)
+  languages      CardLanguage[]
+
+  // Future pricing integration hooks
+  marketPriceMyr       Float?
+  marketPriceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userCards   UserCard[]
+  buyRequests BuyRequest[]
+
+  @@index([setId])
+  @@index([name])
+  @@index([cardType])
+  @@index([rarity])
+}
+
+// ============================================================
+// COLLECTION (user-owned cards)
+// A UserCard exists independently of any sale activity.
+// sellMode determines whether it's also exposed as a listing or open to offers.
+// ============================================================
+
+model UserCard {
+  id             String        @id @default(cuid())
+  ownerId        String
+  owner          Profile       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  cardId         String
+  card           Card          @relation(fields: [cardId], references: [id])
+
+  quantity       Int           @default(1)
+  condition      CardCondition @default(NEAR_MINT)
+  language       CardLanguage  @default(EN)
+  isAlternateArt Boolean       @default(false)
+  note           String?
+  photoUrl       String?
+
+  sellMode       SellMode      @default(COLLECTION)
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  saleListing    SaleListing?
+  sellPreference SellPreference?
+
+  @@index([ownerId])
+  @@index([cardId])
+  @@index([sellMode])
+}
+
+// ============================================================
+// SELLING — Active fixed-price listings
+// ============================================================
+
+model SaleListing {
+  id             String             @id @default(cuid())
+  sellerId       String
+  seller         Profile            @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  userCardId     String             @unique
+  userCard       UserCard           @relation(fields: [userCardId], references: [id], onDelete: Cascade)
+
+  priceMyr       Float
+  shippingPref   ShippingPreference @default(BOTH)
+  shippingFeeMyr Float?
+  description    String?
+
+  status         ListingStatus      @default(ACTIVE)
+  expiresAt      DateTime?
+  soldAt         DateTime?
+  views          Int                @default(0)
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  conversations  Conversation[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([priceMyr])
+}
+
+// ============================================================
+// SELLING — Passive "open to offers"
+// ============================================================
+
+model SellPreference {
+  id              String             @id @default(cuid())
+  ownerId         String
+  owner           Profile            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  userCardId      String             @unique
+  userCard        UserCard           @relation(fields: [userCardId], references: [id], onDelete: Cascade)
+
+  minimumPriceMyr Float
+  shippingPref    ShippingPreference @default(BOTH)
+  note            String?
+  isActive        Boolean            @default(true)
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([ownerId])
+  @@index([isActive])
+  @@index([minimumPriceMyr])
+}
+
+// ============================================================
+// BUYING — Buy requests / wanted posts
+// ============================================================
+
+model BuyRequest {
+  id             String             @id @default(cuid())
+  buyerId        String
+  buyer          Profile            @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  cardId         String
+  card           Card               @relation(fields: [cardId], references: [id])
+
+  minCondition   CardCondition      @default(GOOD)
+  language       CardLanguage?
+  quantity       Int                @default(1)
+  maxPriceMyr    Float
+  shippingPref   ShippingPreference @default(BOTH)
+  preferredCity  String?
+  preferredState String?
+  note           String?
+
+  status         BuyRequestStatus   @default(ACTIVE)
+  expiresAt      DateTime?
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([buyerId])
+  @@index([cardId])
+  @@index([status])
+  @@index([maxPriceMyr])
+}
+
+// ============================================================
+// MESSAGING — simple thread + messages
+// ============================================================
+
+model Conversation {
+  id            String       @id @default(cuid())
+  buyerId       String
+  buyer         Profile      @relation("ConversationBuyer", fields: [buyerId], references: [id])
+  sellerId      String
+  seller        Profile      @relation("ConversationSeller", fields: [sellerId], references: [id])
+
+  saleListingId String?
+  saleListing   SaleListing? @relation(fields: [saleListingId], references: [id])
+
+  lastMessageAt DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  messages      Message[]
+
+  @@unique([buyerId, sellerId, saleListingId])
+  @@index([buyerId])
+  @@index([sellerId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         Profile      @relation(fields: [senderId], references: [id])
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+// ============================================================
+// MODERATION
+// ============================================================
+
+model Report {
+  id             String           @id @default(cuid())
+  reporterId     String
+  reporter       Profile          @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUserId String?
+  reportedUser   Profile?         @relation("ReportedUser", fields: [reportedUserId], references: [id])
+
+  targetType     ReportTargetType
+  targetId       String?
+  reason         String
+  detail         String?
+  status         ReportStatus     @default(PENDING)
+  resolutionNote String?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status])
+  @@index([reportedUserId])
+  @@index([targetType, targetId])
+}
