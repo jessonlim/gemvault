@@ -10,3 +10,6 @@ prisma/migrations/dev.db*
 prisma/data/
 *.tsbuildinfo
 .turbo
+
+# Local Claude Code settings (may contain command history with secrets)
+.claude/

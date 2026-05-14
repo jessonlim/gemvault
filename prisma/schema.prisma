@@ -85,6 +85,13 @@ enum ReportTargetType {
   CARD
 }
 
+enum SaleStatus {
+  PENDING_BUYER_CONFIRM
+  CONFIRMED
+  DISPUTED
+  CANCELLED
+}
+
 // ============================================================
 // USERS / PROFILES
 // Linked to Supabase auth.users via userId
@@ -132,6 +139,10 @@ model Profile {
   messages              Message[]
   reportsMade           Report[]         @relation("Reporter")
   reportsReceived       Report[]         @relation("ReportedUser")
+  salesAsSeller         Sale[]           @relation("SaleSeller")
+  salesAsBuyer          Sale[]           @relation("SaleBuyer")
+  ratingsGiven          SaleRating[]     @relation("RatingRater")
+  ratingsReceived       SaleRating[]     @relation("RatingRated")
 
   @@index([username])
   @@index([city, state])
@@ -192,6 +203,7 @@ model Card {
 
   userCards   UserCard[]
   buyRequests BuyRequest[]
+  sales       Sale[]
 
   @@index([setId])
   @@index([name])
@@ -257,6 +269,7 @@ model SaleListing {
   updatedAt      DateTime           @updatedAt
 
   conversations  Conversation[]
+  sales          Sale[]
 
   @@index([sellerId])
   @@index([status])
@@ -382,4 +395,71 @@ model Report {
   @@index([status])
   @@index([reportedUserId])
   @@index([targetType, targetId])
+}
+
+// ============================================================
+// SALES — completed transactions
+// Recorded with mutual confirmation so we have trustworthy
+// price + volume data per card for the GemVault market signal.
+// ============================================================
+
+model Sale {
+  id               String       @id @default(cuid())
+
+  sellerId         String
+  seller           Profile      @relation("SaleSeller", fields: [sellerId], references: [id])
+  buyerId          String
+  buyer            Profile      @relation("SaleBuyer", fields: [buyerId], references: [id])
+
+  // What was sold (snapshot — UserCard may be deleted after confirm)
+  cardId           String
+  card             Card         @relation(fields: [cardId], references: [id])
+  condition        CardCondition
+  language         CardLanguage
+  isAlternateArt   Boolean      @default(false)
+
+  finalPriceMyr    Float
+
+  // Optional context — null for direct/open-to-offers sales
+  saleListingId    String?
+  saleListing      SaleListing? @relation(fields: [saleListingId], references: [id], onDelete: SetNull)
+
+  // Lifecycle
+  status           SaleStatus   @default(PENDING_BUYER_CONFIRM)
+  sellerMarkedAt   DateTime     @default(now())
+  buyerConfirmedAt DateTime?
+  disputedAt       DateTime?
+  cancelledAt      DateTime?
+
+  sellerNote       String?
+  buyerDisputeNote String?
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  ratings          SaleRating[]
+
+  @@index([sellerId])
+  @@index([buyerId])
+  @@index([cardId, status])
+  @@index([status])
+}
+
+model SaleRating {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  raterId   String
+  rater     Profile  @relation("RatingRater", fields: [raterId], references: [id])
+  ratedId   String
+  rated     Profile  @relation("RatingRated", fields: [ratedId], references: [id])
+
+  stars     Int      // 1-5
+  review    String?
+  createdAt DateTime @default(now())
+
+  @@unique([saleId, raterId])
+  @@index([ratedId])
+  @@index([saleId])
 }

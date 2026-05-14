@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { RarityBadge } from "@/components/ui/rarity-badge";
 import { StickyMobileBar } from "@/components/layout/StickyMobileBar";
 import { getCardByCode } from "@/services/cards";
+import { getRecentSalesForCard } from "@/services/sales";
 import { db } from "@/lib/db";
-import { formatMyr, CONDITION_LABELS, LANGUAGE_LABELS } from "@/lib/utils";
+import { formatMyr, CONDITION_LABELS, LANGUAGE_LABELS, timeAgo } from "@/lib/utils";
+import { ConditionBadge } from "@/components/ui/condition-badge";
 import { Flame, Plus, Heart, ChevronLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +25,7 @@ export default async function CardDetailPage({
   const card = await getCardByCode(code);
   if (!card) notFound();
 
-  const [activeListings, buyRequests] = await Promise.all([
+  const [activeListings, buyRequests, recentSales] = await Promise.all([
     db.saleListing.findMany({
       where: { status: "ACTIVE", userCard: { cardId: card.id } },
       include: {
@@ -39,6 +41,7 @@ export default async function CardDetailPage({
       orderBy: { maxPriceMyr: "desc" },
       take: 10,
     }),
+    getRecentSalesForCard(card.id, 5),
   ]);
 
   const lowestPrice = activeListings[0]?.priceMyr;
@@ -88,11 +91,13 @@ export default async function CardDetailPage({
 
           {/* Price panel */}
           <Card className="mt-5 surface-glass">
-            <CardContent className="grid grid-cols-3 gap-3 p-4 sm:p-5">
+            <CardContent className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
               <PriceStat
-                label="Market price"
-                value={marketPrice != null ? formatMyr(marketPrice) : "—"}
-                hint={marketPrice == null ? "Not tracked yet" : "Latest reference"}
+                label="GemVault avg"
+                value={recentSales.stats.avg != null ? formatMyr(recentSales.stats.avg) : "—"}
+                hint={recentSales.stats.count > 0
+                  ? `${recentSales.stats.count} sale${recentSales.stats.count === 1 ? "" : "s"}`
+                  : "No sales yet"}
                 accent="gold"
               />
               <PriceStat
@@ -106,6 +111,12 @@ export default async function CardDetailPage({
                 value={highestOffer != null ? formatMyr(highestOffer) : "—"}
                 hint={`${buyRequests.length} buyer${buyRequests.length === 1 ? "" : "s"}`}
                 accent="success"
+              />
+              <PriceStat
+                label="Last sold"
+                value={recentSales.stats.last != null ? formatMyr(recentSales.stats.last) : "—"}
+                hint={recentSales.stats.lastAt ? timeAgo(recentSales.stats.lastAt) : "—"}
+                accent="default"
               />
             </CardContent>
           </Card>
@@ -221,6 +232,42 @@ export default async function CardDetailPage({
         )}
       </section>
 
+      {/* Recent GemVault sales */}
+      {recentSales.sales.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-lg font-bold tracking-tight text-slate-50">Recent sales on GemVault</h2>
+          <p className="text-sm text-slate-400">Confirmed transactions for this card.</p>
+          <div className="mt-3 overflow-hidden rounded-2xl border border-white/5 bg-slate-900/60">
+            <table className="w-full text-sm">
+              <thead className="border-b border-white/5 text-xs uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="p-3 text-left font-medium">Price</th>
+                  <th className="p-3 text-left font-medium">Condition</th>
+                  <th className="hidden p-3 text-left font-medium sm:table-cell">Language</th>
+                  <th className="p-3 text-right font-medium">Sold</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {recentSales.sales.map((s) => (
+                  <tr key={s.id}>
+                    <td className="p-3 font-bold text-slate-50">{formatMyr(s.finalPriceMyr)}</td>
+                    <td className="p-3">
+                      <ConditionBadge condition={s.condition} />
+                    </td>
+                    <td className="hidden p-3 text-slate-400 sm:table-cell">
+                      {LANGUAGE_LABELS[s.language]}
+                    </td>
+                    <td className="p-3 text-right text-xs text-slate-500">
+                      {s.buyerConfirmedAt ? timeAgo(s.buyerConfirmedAt) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* Sticky mobile CTAs */}
       <StickyMobileBar>
         <div className="flex gap-2">
@@ -259,12 +306,13 @@ function PriceStat({
   label: string;
   value: string;
   hint?: string;
-  accent: "brand" | "gold" | "success";
+  accent: "brand" | "gold" | "success" | "default";
 }) {
   const colorMap = {
     brand: "text-brand-400",
     gold: "text-gold-500",
     success: "text-success-500",
+    default: "text-slate-200",
   };
   return (
     <div>

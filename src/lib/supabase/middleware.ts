@@ -44,6 +44,7 @@ export async function updateSession(request: NextRequest) {
     "/messages",
     "/settings",
     "/matches",
+    "/sales",
     "/me",
     "/admin",
   ];

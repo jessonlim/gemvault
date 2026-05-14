@@ -11,6 +11,7 @@ import {
   Search,
   MessageCircle,
   Zap,
+  Receipt,
   Settings,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ const items = [
   { href: "/offers", label: "Open to offers", icon: Heart },
   { href: "/buy-requests/mine", label: "Want list", icon: Search },
   { href: "/matches", label: "Matches", icon: Zap },
+  { href: "/sales", label: "Sales", icon: Receipt },
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

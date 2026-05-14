@@ -6,9 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ContactButton } from "@/components/messaging/ContactButton";
 import { StickyMobileBar } from "@/components/layout/StickyMobileBar";
+import { MarkSoldDialog } from "@/components/sales/MarkSoldDialog";
 import { getListingById, incrementListingViews } from "@/services/marketplace";
 import { findMatchingBuyRequests } from "@/services/matching";
 import { getCurrentProfile } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { MatchingBuyRequests } from "@/components/marketplace/MatchingBuyRequests";
 import {
   formatMyr,
@@ -41,15 +43,23 @@ export default async function ListingDetailPage({
   const seller = listing.seller;
   const isOwner = viewer?.id === seller.id;
 
-  // For the seller (owner), surface buy requests that match this listing
-  const buyerMatches = isOwner
-    ? await findMatchingBuyRequests({
-        cardId: card.id,
-        condition: listing.userCard.condition,
-        askPriceMyr: listing.priceMyr,
-        language: listing.userCard.language,
-      })
-    : [];
+  // For the seller (owner), surface buy requests + buyer suggestions for Mark Sold
+  const [buyerMatches, buyerSuggestions] = isOwner
+    ? await Promise.all([
+        findMatchingBuyRequests({
+          cardId: card.id,
+          condition: listing.userCard.condition,
+          askPriceMyr: listing.priceMyr,
+          language: listing.userCard.language,
+        }),
+        db.conversation.findMany({
+          where: { saleListingId: listing.id, sellerId: seller.id },
+          include: { buyer: { select: { username: true, displayName: true } } },
+          orderBy: { lastMessageAt: "desc" },
+          take: 8,
+        }),
+      ])
+    : [[], []];
 
   return (
     <Container className="py-6 pb-32 sm:py-10 sm:pb-10">
@@ -102,12 +112,30 @@ export default async function ListingDetailPage({
                   label="Contact seller"
                   defaultMessage={`Hi! I'm interested in your listing for ${card.name} (${card.cardCode}).`}
                 />
-                {isOwner && (
-                  <Link href={`/collection/${listing.userCardId}`} className="ml-2 inline-block">
+              </div>
+              {isOwner && listing.status === "ACTIVE" && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-white/5 pt-3">
+                  <MarkSoldDialog
+                    userCardId={listing.userCardId}
+                    defaultPrice={listing.priceMyr}
+                    buyerSuggestions={buyerSuggestions.map((c) => c.buyer)}
+                  />
+                  <Link href={`/collection/${listing.userCardId}`}>
                     <span className="text-sm text-brand-400 hover:underline">Edit listing →</span>
                   </Link>
-                )}
-              </div>
+                </div>
+              )}
+              {isOwner && listing.status === "RESERVED" && (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-3 text-xs text-amber-300">
+                  Sale marked — waiting for buyer to confirm. View progress in{" "}
+                  <Link href="/sales" className="font-semibold underline">Sales</Link>.
+                </div>
+              )}
+              {isOwner && listing.status === "SOLD" && (
+                <div className="mt-3 rounded-lg border border-success-500/30 bg-emerald-900/10 p-3 text-xs text-emerald-300">
+                  This listing is sold. 🎉
+                </div>
+              )}
             </CardContent>
           </Card>
 

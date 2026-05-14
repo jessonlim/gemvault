@@ -10,9 +10,12 @@ import { OfferItem } from "@/components/marketplace/OfferItem";
 import { ContactButton } from "@/components/messaging/ContactButton";
 import { CardImage } from "@/components/cards/CardImage";
 import { getPublicProfileByUsername } from "@/services/profiles";
+import { getRatingsForUser } from "@/services/ratings";
 import { getCurrentProfile } from "@/lib/auth";
 import { formatMyr, formatDate, CONDITION_LABELS, timeAgo } from "@/lib/utils";
 import { ShieldCheck, MapPin, Calendar, Star, Settings as SettingsIcon } from "lucide-react";
+import { StarRating } from "@/components/sales/StarRating";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,11 @@ export default async function PublicProfilePage({
   if (!data) notFound();
   const { profile, activeListings, activeOffers, activeBuyRequests } = data;
   const isOwner = viewer?.id === profile.id;
+
+  const [recentRatings, ratingCount] = await Promise.all([
+    getRatingsForUser(profile.id, 5),
+    db.saleRating.count({ where: { ratedId: profile.id } }),
+  ]);
 
   const location = [profile.city, profile.state, profile.country].filter(Boolean).join(", ");
   const initials = (profile.displayName ?? profile.username).slice(0, 2).toUpperCase();
@@ -64,11 +72,7 @@ export default async function PublicProfilePage({
                 <span className="inline-flex items-center gap-1">
                   <Calendar size={12} /> Joined {formatDate(profile.createdAt)}
                 </span>
-                {profile.rating != null && (
-                  <span className="inline-flex items-center gap-1">
-                    <Star size={12} className="text-amber-400" /> {profile.rating.toFixed(1)}
-                  </span>
-                )}
+                <StarRating value={profile.rating} count={ratingCount} />
                 <span>{profile.totalSales} sales</span>
                 <span>{profile.totalPurchases} purchases</span>
               </div>
@@ -162,6 +166,51 @@ export default async function PublicProfilePage({
           ))}
         </div>
       </Section>
+
+      {/* Reviews */}
+      {recentRatings.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold tracking-tight text-slate-50">Reviews</h2>
+          <p className="text-sm text-slate-400">What other collectors say after dealing with @{profile.username}.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {recentRatings.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600/20 text-xs font-semibold text-brand-300">
+                        {(r.rater.displayName ?? r.rater.username).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <Link href={`/profile/${r.rater.username}`} className="text-sm font-medium text-slate-100 hover:underline">
+                          {r.rater.displayName ?? r.rater.username}
+                        </Link>
+                        <p className="text-[10px] text-slate-500">{timeAgo(r.createdAt)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star
+                          key={n}
+                          size={14}
+                          className={n <= r.stars ? "fill-gold-500 text-gold-500" : "text-slate-700"}
+                          strokeWidth={1.5}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {r.review && (
+                    <p className="mt-2 text-sm text-slate-300">&ldquo;{r.review}&rdquo;</p>
+                  )}
+                  <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-500">
+                    Re: {r.sale.card.name} · {r.sale.card.cardCode}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
     </Container>
   );
 }
