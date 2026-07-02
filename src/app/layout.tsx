@@ -12,7 +12,12 @@ export const metadata: Metadata = {
   title: "GemVault — Your Trading Card Vault",
   description:
     "Track your card collection, discover market value, and match with collectors ready to buy or sell.",
-  icons: { icon: "/favicon.ico" },
+  icons: { icon: "/icon.svg" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GemVault",
+  },
 };
 
 export const viewport: Viewport = {
@@ -20,6 +25,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: "#0b0b0f",
+  // Edge-to-edge on notched phones — also required for the
+  // env(safe-area-inset-*) padding we use on the tab bar to take effect
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

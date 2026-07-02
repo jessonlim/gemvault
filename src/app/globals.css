@@ -45,10 +45,22 @@ body {
   color: #ececf2;
   -webkit-font-smoothing: antialiased;
   font-family: var(--font-sans);
+  /* No grey tap flashes — feels more app-like on mobile */
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Kill the double-tap-to-zoom delay on interactive elements (iOS) */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 /* ====== Premium red gradients used across the app ====== */
