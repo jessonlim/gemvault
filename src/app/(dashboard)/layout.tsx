@@ -18,7 +18,10 @@ export default async function DashboardLayout({
       <Container className="py-4 sm:py-8">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
           <DashboardSidebar />
-          <main className="pb-28 sm:pb-0">
+          {/* min-w-0: grid items refuse to shrink below their content width by
+              default, so the 9-tab mobile nav row was forcing the whole page
+              to ~750px wide on phones (breaking the layout + hiding the tab bar) */}
+          <main className="min-w-0 pb-28 sm:pb-0">
             <DashboardMobileNav />
             {children}
           </main>
