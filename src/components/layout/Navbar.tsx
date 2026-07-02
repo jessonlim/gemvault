@@ -57,6 +57,12 @@ export async function Navbar() {
           >
             Want List
           </Link>
+          <Link
+            href="/oripa"
+            className="rounded-lg bg-gradient-to-r from-brand-600/20 to-gold-500/10 px-3 py-1.5 text-sm font-semibold text-gold-500 hover:from-brand-600/30 hover:to-gold-500/20"
+          >
+            Oripa ✨
+          </Link>
         </nav>
 
         <div className="flex flex-shrink-0 items-center gap-2">

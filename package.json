@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "db:import": "tsx prisma/import-cards.ts"
+    "db:import": "tsx prisma/import-cards.ts",
+    "db:import-pokemon": "tsx prisma/import-pokemon.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

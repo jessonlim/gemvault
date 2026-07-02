@@ -8,15 +8,25 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Sheet } from "@/components/ui/sheet";
-import { CARD_TYPES, COLORS, RARITIES } from "@/services/cards";
+import type { Game } from "@prisma/client";
 
 type SetOption = { code: string; name: string };
 
-export function CardFilters({ sets }: { sets: SetOption[] }) {
+interface Props {
+  sets: SetOption[];
+  game: Game;
+  rarities: string[];
+  cardTypes: string[];
+  colors: string[];
+}
+
+export function CardFilters({ sets, game, rarities, cardTypes, colors }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const colorLabel = game === "POKEMON" ? "Type" : "Color";
 
   function update(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
@@ -27,7 +37,9 @@ export function CardFilters({ sets }: { sets: SetOption[] }) {
   }
 
   function reset() {
-    startTransition(() => router.push("/cards"));
+    const next = new URLSearchParams();
+    if (game !== "ONE_PIECE") next.set("game", game);
+    startTransition(() => router.push(`/cards?${next.toString()}`));
   }
 
   function onSearchSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -38,7 +50,7 @@ export function CardFilters({ sets }: { sets: SetOption[] }) {
   }
 
   const activeCount = Array.from(params.keys()).filter(
-    (k) => k !== "page" && k !== "q"
+    (k) => k !== "page" && k !== "q" && k !== "game"
   ).length;
 
   const advancedFilters = (
@@ -57,19 +69,19 @@ export function CardFilters({ sets }: { sets: SetOption[] }) {
           label="Rarity"
           value={params.get("rarity") ?? ""}
           onChange={(v) => update("rarity", v)}
-          options={[{ value: "", label: "Any rarity" }, ...RARITIES.map((r) => ({ value: r, label: r }))]}
+          options={[{ value: "", label: "Any rarity" }, ...rarities.map((r) => ({ value: r, label: r }))]}
         />
         <FilterSelect
-          label="Type"
+          label="Card type"
           value={params.get("cardType") ?? ""}
           onChange={(v) => update("cardType", v)}
-          options={[{ value: "", label: "Any type" }, ...CARD_TYPES.map((t) => ({ value: t, label: t }))]}
+          options={[{ value: "", label: "Any type" }, ...cardTypes.map((t) => ({ value: t, label: t }))]}
         />
         <FilterSelect
-          label="Color"
+          label={colorLabel}
           value={params.get("color") ?? ""}
           onChange={(v) => update("color", v)}
-          options={[{ value: "", label: "Any color" }, ...COLORS.map((c) => ({ value: c, label: c }))]}
+          options={[{ value: "", label: `Any ${colorLabel.toLowerCase()}` }, ...colors.map((c) => ({ value: c, label: c }))]}
         />
       </div>
 

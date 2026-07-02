@@ -92,6 +92,26 @@ enum SaleStatus {
   CANCELLED
 }
 
+enum Game {
+  ONE_PIECE
+  POKEMON
+}
+
+enum OripaStatus {
+  DRAFT
+  ACTIVE
+  SOLD_OUT
+  ARCHIVED
+}
+
+enum OripaTier {
+  S
+  A
+  B
+  C
+  D
+}
+
 // ============================================================
 // USERS / PROFILES
 // Linked to Supabase auth.users via userId
@@ -143,6 +163,11 @@ model Profile {
   salesAsBuyer          Sale[]           @relation("SaleBuyer")
   ratingsGiven          SaleRating[]     @relation("RatingRater")
   ratingsReceived       SaleRating[]     @relation("RatingRated")
+  oripaSeriesCreated    OripaSeries[]    @relation("OripaCreator")
+  oripaLastOneWins      OripaSeries[]    @relation("OripaLastOneWinner")
+  oripaDraws            OripaSlot[]      @relation("OripaDrawer")
+  oripaCredits          OripaCredit[]    @relation("OripaCreditUser")
+  oripaCreditsGranted   OripaCredit[]    @relation("OripaCreditGranter")
 
   @@index([username])
   @@index([city, state])
@@ -155,8 +180,9 @@ model Profile {
 
 model CardSet {
   id          String    @id @default(cuid())
-  code        String    @unique // OP01, OP02, ST01, etc.
+  code        String    @unique // OP01, ST01 (One Piece) / BASE1, SV1 (Pokémon)
   name        String
+  game        Game      @default(ONE_PIECE)
   description String?
   releaseDate DateTime?
   imageUrl    String?
@@ -166,18 +192,20 @@ model CardSet {
   cards Card[]
 
   @@index([code])
+  @@index([game])
 }
 
 model Card {
   id        String  @id @default(cuid())
-  cardCode  String  @unique // e.g. OP01-001
+  cardCode  String  @unique // OP01-001 (One Piece) / BASE1-4 (Pokémon)
   name      String
   setId     String
   set       CardSet @relation(fields: [setId], references: [id])
+  game      Game    @default(ONE_PIECE)
 
-  rarity    String  // C, UC, R, SR, SEC, L, P
-  cardType  String  // LEADER, CHARACTER, EVENT, STAGE
-  colors    String[] // ["Red"], ["Red","Green"]
+  rarity    String  // OP: C/UC/R/SR/SEC/L — PKM: Common/Rare Holo/...
+  cardType  String  // OP: LEADER/CHARACTER/EVENT/STAGE — PKM: POKEMON/TRAINER/ENERGY
+  colors    String[] // OP: card colors — PKM: energy types
   cost      Int?
   power     Int?
   counter   Int?
@@ -204,11 +232,13 @@ model Card {
   userCards   UserCard[]
   buyRequests BuyRequest[]
   sales       Sale[]
+  oripaPrizes OripaPrize[]
 
   @@index([setId])
   @@index([name])
   @@index([cardType])
   @@index([rarity])
+  @@index([game])
 }
 
 // ============================================================
@@ -462,4 +492,100 @@ model SaleRating {
   @@unique([saleId, raterId])
   @@index([ratedId])
   @@index([saleId])
+}
+
+// ============================================================
+// ORIPA — Japanese-style original packs (gacha draws)
+// Admin builds a prize pool, activation shuffles prizes into
+// numbered slots, users spend admin-granted credits to draw.
+// Payment happens off-platform; credits are the entitlement.
+// ============================================================
+
+model OripaSeries {
+  id              String      @id @default(cuid())
+  title           String
+  description     String?
+  game            Game?       // null = mixed / other
+  coverImageUrl   String?
+  pricePerDrawMyr Float       // display price; payment collected off-platform
+
+  status          OripaStatus @default(DRAFT)
+  totalSlots      Int         @default(0) // set at activation
+  activatedAt     DateTime?
+  soldOutAt       DateTime?
+
+  createdById     String
+  createdBy       Profile     @relation("OripaCreator", fields: [createdById], references: [id])
+
+  // ラストワン賞 — awarded to whoever draws the final pack
+  lastOneWinnerId String?
+  lastOneWinner   Profile?    @relation("OripaLastOneWinner", fields: [lastOneWinnerId], references: [id])
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  prizes          OripaPrize[]
+  slots           OripaSlot[]
+  credits         OripaCredit[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model OripaPrize {
+  id           String      @id @default(cuid())
+  seriesId     String
+  series       OripaSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  tier         OripaTier
+  name         String      // e.g. "Shanks OP01-120 Alt Art (PSA 10)"
+  cardId       String?     // optional link to catalog card
+  card         Card?       @relation(fields: [cardId], references: [id])
+  imageUrl     String?     // custom photo; falls back to card.imageUrl
+  quantity     Int         @default(1) // how many of this prize in the pool
+  estValueMyr  Float?
+  isLastOne    Boolean     @default(false) // last-one prize — not slot-assigned
+
+  createdAt    DateTime    @default(now())
+
+  slots        OripaSlot[]
+
+  @@index([seriesId])
+  @@index([tier])
+}
+
+model OripaSlot {
+  id          String      @id @default(cuid())
+  seriesId    String
+  series      OripaSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  slotNumber  Int         // 1..totalSlots — the pack number users pick
+  prizeId     String
+  prize       OripaPrize  @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+
+  drawnById   String?
+  drawnBy     Profile?    @relation("OripaDrawer", fields: [drawnById], references: [id])
+  drawnAt     DateTime?
+  fulfilled   Boolean     @default(false) // admin marks after shipping/handover
+  fulfilledAt DateTime?
+
+  @@unique([seriesId, slotNumber])
+  @@index([seriesId, drawnById])
+  @@index([drawnById])
+}
+
+model OripaCredit {
+  id          String      @id @default(cuid())
+  seriesId    String
+  series      OripaSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  userId      String
+  user        Profile     @relation("OripaCreditUser", fields: [userId], references: [id])
+  credits     Int         @default(0) // remaining draws for this series
+  grantedById String
+  grantedBy   Profile     @relation("OripaCreditGranter", fields: [grantedById], references: [id])
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([seriesId, userId])
+  @@index([userId])
 }

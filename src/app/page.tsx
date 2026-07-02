@@ -101,7 +101,7 @@ function AnonHome() {
       <Container className="py-12 sm:py-16">
         <SectionHeader title="Why GemVault" subtitle="Built for collectors who care about trust, value, and discovery." />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FeatureCard icon={<Library size={20} />} title="Track Collection" body="Catalog every card with condition, language and photos." />
+          <FeatureCard icon={<Library size={20} />} title="Track Collection" body="Catalog every One Piece & Pokémon card with condition, language and photos." />
           <FeatureCard icon={<Tag size={20} />} title="Sell or Stay Open" body="List at fixed price, or accept offers above your minimum." />
           <FeatureCard icon={<Heart size={20} />} title="Want List" body="Post what you want at the price you'll pay." />
           <FeatureCard icon={<Zap size={20} />} title="Smart Matching" body="Buyer demand meets seller supply automatically." />
@@ -250,6 +250,29 @@ async function AuthedHome({ profile }: { profile: { id: string; displayName: str
             href="/buy-requests/mine"
           />
         </div>
+
+        {/* Oripa promo banner */}
+        <Link href="/oripa" className="mt-6 block">
+          <div className="card-lift relative overflow-hidden rounded-2xl border border-gold-500/30 bg-gradient-to-r from-brand-800/60 via-slate-900 to-slate-900 p-5">
+            <div className="bg-red-glow pointer-events-none absolute -right-10 -top-10 h-40 w-40" />
+            <div className="relative flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-gold-500">
+                  ✨ Oripa Packs
+                </p>
+                <p className="mt-1 text-lg font-bold text-slate-50">
+                  Try your luck — pick a pack, win real cards
+                </p>
+                <p className="mt-0.5 text-sm text-slate-400">
+                  Fixed prize pools, transparent odds, last-one bonuses.
+                </p>
+              </div>
+              <span className="hidden flex-shrink-0 text-sm font-semibold text-brand-400 sm:block">
+                Browse series →
+              </span>
+            </div>
+          </div>
+        </Link>
 
         {/* Two-column layout below */}
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">

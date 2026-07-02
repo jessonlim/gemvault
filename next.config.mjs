@@ -5,6 +5,7 @@ const nextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
       { protocol: "https", hostname: "en.onepiece-cardgame.com" },
       { protocol: "https", hostname: "asia-en.onepiece-cardgame.com" },
+      { protocol: "https", hostname: "images.pokemontcg.io" },
     ],
   },
 };
