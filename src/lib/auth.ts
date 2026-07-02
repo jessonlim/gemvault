@@ -5,13 +5,18 @@ import type { Profile } from "@prisma/client";
 
 /**
  * Returns the current Supabase auth user (or null).
+ *
+ * Reads the session from the request cookie (no network call) instead of
+ * re-verifying against Supabase's auth server — the middleware already did
+ * the verified getUser() check for this request, so doing it again here
+ * added a full network round trip to every page render.
  */
 export async function getAuthUser() {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 /**

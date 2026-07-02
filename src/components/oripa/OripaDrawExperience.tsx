@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useCallback, useEffect } from "react";
+import { memo, useMemo, useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -62,6 +62,8 @@ export function OripaDrawExperience({
   const [activeIdx, setActiveIdx] = useState(0);
   const rafRef = useRef<number>();
 
+  const activeIdxRef = useRef(0);
+
   const onRailScroll = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
@@ -79,6 +81,7 @@ export function OripaDrawExperience({
           best = i;
         }
       }
+      activeIdxRef.current = best;
       setActiveIdx(best);
     });
   }, []);
@@ -87,7 +90,7 @@ export function OripaDrawExperience({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  function scrollToIdx(idx: number) {
+  const scrollToIdx = useCallback((idx: number) => {
     const rail = railRef.current;
     if (!rail) return;
     const el = rail.children[Math.max(0, Math.min(idx, rail.children.length - 1))] as HTMLElement | undefined;
@@ -96,13 +99,25 @@ export function OripaDrawExperience({
       left: el.offsetLeft + el.offsetWidth / 2 - rail.clientWidth / 2,
       behavior: "smooth",
     });
-  }
+  }, []);
 
-  function pickSlot(slotNumber: number) {
-    if (!canDraw) return;
-    setError(null);
-    setPhase({ name: "confirm", slotNumber });
-  }
+  const pickSlot = useCallback(
+    (slotNumber: number) => {
+      if (!canDraw) return;
+      setError(null);
+      setPhase({ name: "confirm", slotNumber });
+    },
+    [canDraw]
+  );
+
+  // Stable across scroll re-renders so memoized packs actually skip re-rendering
+  const handlePackActivate = useCallback(
+    (idx: number, slotNumber: number) => {
+      if (idx === activeIdxRef.current) pickSlot(slotNumber);
+      else scrollToIdx(idx);
+    },
+    [pickSlot, scrollToIdx]
+  );
 
   function pickRandom() {
     if (!canDraw || available.length === 0) return;
@@ -206,29 +221,21 @@ export function OripaDrawExperience({
             onScroll={onRailScroll}
             className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto px-[calc(50%-4.5rem)] py-6"
           >
-            {carouselSlots.map((s, idx) => {
-              const isCentered = idx === activeIdx;
-              return (
-                <button
-                  key={s.slotNumber}
-                  type="button"
-                  onClick={() => (isCentered ? pickSlot(s.slotNumber) : scrollToIdx(idx))}
-                  className={cn(
-                    "snap-center transition-all duration-300",
-                    isCentered ? "scale-105" : "scale-90 opacity-60"
-                  )}
-                >
-                  <div className={cn(idx % 2 === 0 ? "oripa-float" : "oripa-float oripa-float-delay")}>
-                    <PackVisual
-                      title={seriesTitle}
-                      slotNumber={s.slotNumber}
-                      glow={isCentered && canDraw}
-                      size="carousel"
-                    />
-                  </div>
-                </button>
-              );
-            })}
+            {carouselSlots.map((s, idx) => (
+              <CarouselPack
+                key={s.slotNumber}
+                idx={idx}
+                slotNumber={s.slotNumber}
+                seriesTitle={seriesTitle}
+                isCentered={idx === activeIdx}
+                // Only packs near the center animate — 40 packs floating at
+                // once keeps phone GPUs busy and makes taps feel laggy
+                shouldFloat={Math.abs(idx - activeIdx) <= 2}
+                floatAlt={idx % 2 === 1}
+                glow={idx === activeIdx && canDraw}
+                onActivate={handlePackActivate}
+              />
+            ))}
           </div>
 
           {/* CTA under carousel */}
@@ -347,6 +354,45 @@ export function OripaDrawExperience({
 }
 
 // ============== pieces ==============
+
+/**
+ * Memoized so scroll-driven activeIdx changes only re-render the packs whose
+ * props actually changed (the old + new center and float window), not all 40.
+ */
+const CarouselPack = memo(function CarouselPack({
+  idx,
+  slotNumber,
+  seriesTitle,
+  isCentered,
+  shouldFloat,
+  floatAlt,
+  glow,
+  onActivate,
+}: {
+  idx: number;
+  slotNumber: number;
+  seriesTitle: string;
+  isCentered: boolean;
+  shouldFloat: boolean;
+  floatAlt: boolean;
+  glow: boolean;
+  onActivate: (idx: number, slotNumber: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onActivate(idx, slotNumber)}
+      className={cn(
+        "snap-center transition-all duration-300",
+        isCentered ? "scale-105" : "scale-90 opacity-60"
+      )}
+    >
+      <div className={cn(shouldFloat && "oripa-float", shouldFloat && floatAlt && "oripa-float-delay")}>
+        <PackVisual title={seriesTitle} slotNumber={slotNumber} glow={glow} size="carousel" />
+      </div>
+    </button>
+  );
+});
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (
