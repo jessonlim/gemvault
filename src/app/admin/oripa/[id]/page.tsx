@@ -21,6 +21,17 @@ export default async function AdminOripaDetailPage({ params }: { params: { id: s
   const totalPacks = poolPrizes.reduce((a, p) => a + p.quantity, 0);
   const drawnCount = series.slots.length;
 
+  // ---- Pool economics (admin-only sanity check) ----
+  const revenue = totalPacks * series.pricePerDrawMyr;
+  const missingValues = series.prizes.filter((p) => p.estValueMyr == null).length;
+  const prizeCost =
+    poolPrizes.reduce((a, p) => a + (p.estValueMyr ?? 0) * p.quantity, 0) +
+    (lastOnePrize?.estValueMyr ?? 0);
+  const profit = revenue - prizeCost;
+  const returnRate = revenue > 0 ? prizeCost / revenue : 0;
+  const breakevenPacks =
+    series.pricePerDrawMyr > 0 ? Math.ceil(prizeCost / series.pricePerDrawMyr) : 0;
+
   return (
     <div>
       <Link href="/admin/oripa" className="text-sm text-brand-400 hover:underline">
@@ -63,6 +74,59 @@ export default async function AdminOripaDetailPage({ params }: { params: { id: s
           totalPacks={totalPacks}
         />
       </div>
+
+      {/* Pool economics — admin-only sanity check.
+          The honest protection against "grand prize pulled early": price the
+          pool so it profits at sellout no matter WHEN the top prize drops. */}
+      {totalPacks > 0 && (
+        <Card className="mt-6 border-gold-500/20">
+          <CardContent className="p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-gold-500">
+              Pool economics
+            </h2>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <EconStat label="Revenue at sellout" value={formatMyr(revenue)} hint={`${totalPacks} × ${formatMyr(series.pricePerDrawMyr)}`} />
+              <EconStat label="Total prize value" value={formatMyr(prizeCost)} hint={lastOnePrize ? "incl. last-one" : undefined} />
+              <EconStat
+                label="Profit at sellout"
+                value={formatMyr(profit)}
+                hint={`${Math.round((1 - returnRate) * 100)}% margin`}
+                tone={profit > 0 ? "good" : "bad"}
+              />
+              <EconStat
+                label="Breakeven"
+                value={`${Math.min(breakevenPacks, totalPacks)}/${totalPacks} packs`}
+                hint="sales needed to cover prizes"
+                tone={breakevenPacks <= totalPacks ? undefined : "bad"}
+              />
+            </div>
+
+            {missingValues > 0 && (
+              <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-2.5 text-xs text-amber-300">
+                ⚠️ {missingValues} prize{missingValues === 1 ? " has" : "s have"} no estimated value —
+                the numbers above understate your prize cost. Add est. values for accurate math.
+              </p>
+            )}
+            {profit < 0 && (
+              <p className="mt-3 rounded-lg border border-red-500/40 bg-red-900/10 p-2.5 text-xs text-red-300">
+                🚨 This pool loses {formatMyr(Math.abs(profit))} even if every pack sells.
+                Raise the draw price, add packs, or trim prize value before activating.
+              </p>
+            )}
+            {profit >= 0 && returnRate > 0 && returnRate < 0.5 && (
+              <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-2.5 text-xs text-amber-300">
+                ⚠️ Return rate is {Math.round(returnRate * 100)}% — buyers get back less than half
+                of what they pay in prize value. Japanese oripa shops average 60–75%; a stingy pool
+                hurts repeat sales more than an early grand-prize pull ever will.
+              </p>
+            )}
+            <p className="mt-3 text-xs text-slate-500">
+              As long as {Math.min(breakevenPacks, totalPacks)} packs sell, you profit no matter when
+              the top prize drops. Never gate or delay prizes — shown odds must be real odds.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Prize pool */}
       <section className="mt-8">
@@ -226,6 +290,32 @@ export default async function AdminOripaDetailPage({ params }: { params: { id: s
           🏆 Last One prize ({lastOnePrize.name}) won by @{series.lastOneWinner.username}
         </div>
       )}
+    </div>
+  );
+}
+
+function EconStat({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "good" | "bad";
+}) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-slate-900/60 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <p
+        className={`mt-0.5 text-base font-bold ${
+          tone === "good" ? "text-success-500" : tone === "bad" ? "text-red-400" : "text-slate-100"
+        }`}
+      >
+        {value}
+      </p>
+      {hint && <p className="text-[10px] text-slate-500">{hint}</p>}
     </div>
   );
 }
