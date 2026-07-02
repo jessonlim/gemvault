@@ -104,60 +104,13 @@ export default async function OripaDetailPage({ params }: { params: { id: string
         </div>
       )}
 
-      {/* Prize pool — full transparency */}
-      <section className="mt-8">
-        <h2 className="text-lg font-bold tracking-tight text-slate-50">Prize pool</h2>
-        <p className="text-sm text-slate-400">
-          Fixed at launch and never edited. Counts show remaining / original.
-        </p>
-        <div className="mt-3 space-y-4">
-          {tiers.map((tier) => (
-            <div key={tier.tier}>
-              <div className="mb-2 flex items-center gap-2">
-                <TierBadge tier={tier.tier} />
-                <span className="text-xs font-semibold text-slate-300">
-                  {tier.remaining}/{tier.total} remaining
-                </span>
-                {tier.remaining === 0 && (
-                  <Badge variant="danger" className="text-[10px]">All pulled</Badge>
-                )}
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {tier.prizes.map((p) => (
-                  <Card key={p.id} className={p.remaining === 0 ? "opacity-50" : ""}>
-                    <CardContent className="flex items-center gap-3 p-3">
-                      {p.imageUrl ? (
-                        <div className="relative h-14 w-10 flex-shrink-0 overflow-hidden rounded-md bg-slate-800">
-                          <Image src={p.imageUrl} alt="" fill className="object-cover" unoptimized />
-                        </div>
-                      ) : (
-                        <div className="flex h-14 w-10 flex-shrink-0 items-center justify-center rounded-md bg-slate-800">
-                          <GemLogo size={16} />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-1 text-sm font-medium text-slate-100">{p.name}</p>
-                        <p className="text-xs text-slate-400">
-                          {p.remaining}/{p.total} left
-                          {p.estValueMyr != null && ` · est. ${formatMyr(p.estValueMyr)}`}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Pick your pack */}
-      <section className="mt-8">
+      {/* Pick your pack — the main event, right up top */}
+      <section className="mt-6">
         <h2 className="text-lg font-bold tracking-tight text-slate-50">Pick your pack</h2>
-        <p className="mb-4 text-sm text-slate-400">
+        <p className="text-sm text-slate-400">
           {soldOut
             ? "This series is sold out — every pack has been drawn."
-            : "Tap an available pack to draw it, or let fate decide with a random pick."}
+            : "Swipe through the packs and tap to open, or let fate decide."}
         </p>
         <OripaDrawExperience
           seriesId={series.id}
@@ -169,6 +122,73 @@ export default async function OripaDetailPage({ params }: { params: { id: string
           hostUsername={series.createdBy.username}
           isActive={series.status === "ACTIVE"}
         />
+      </section>
+
+      {/* Prize pool — compact, full transparency */}
+      <section className="mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-bold tracking-tight text-slate-50">Prize pool</h2>
+          <p className="text-xs text-slate-500">Fixed at launch, never edited · remaining/original</p>
+        </div>
+
+        {/* Tier summary strip */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {tiers.map((tier) => (
+            <div
+              key={tier.tier}
+              className={`flex items-center gap-1.5 rounded-full border border-white/8 bg-slate-900/60 py-1 pl-1 pr-3 ${
+                tier.remaining === 0 ? "opacity-50" : ""
+              }`}
+            >
+              <TierBadge tier={tier.tier} />
+              <span className="text-xs font-semibold text-slate-200">
+                {tier.remaining}/{tier.total}
+              </span>
+              {tier.remaining === 0 && (
+                <span className="text-[10px] text-red-400">all pulled</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Horizontal prize rail — S first, image-focused */}
+        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-2">
+          {tiers.flatMap((tier) =>
+            tier.prizes.map((p) => (
+              <div
+                key={p.id}
+                className={`w-28 flex-shrink-0 rounded-xl border border-white/5 bg-slate-900/60 p-2 ${
+                  p.remaining === 0 ? "opacity-40" : ""
+                }`}
+              >
+                <div className="relative aspect-[5/7] w-full overflow-hidden rounded-lg bg-slate-800">
+                  {p.imageUrl ? (
+                    <Image src={p.imageUrl} alt={p.name} fill className="object-cover" unoptimized />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <GemLogo size={20} />
+                    </div>
+                  )}
+                  <div className="absolute left-1 top-1">
+                    <TierBadge tier={tier.tier} />
+                  </div>
+                  {p.remaining === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 text-[10px] font-bold uppercase tracking-wider text-red-300">
+                      Pulled
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 line-clamp-1 text-[11px] font-medium text-slate-100">
+                  {p.name}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  {p.remaining}/{p.total} left
+                  {p.estValueMyr != null && ` · ${formatMyr(p.estValueMyr)}`}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       {/* My pulls */}

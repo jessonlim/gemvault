@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -9,7 +9,7 @@ import { GemLogo } from "@/components/ui/gem-logo";
 import { TierBadge } from "@/components/oripa/TierBadge";
 import { drawSlotAction, type DrawActionResult } from "@/app/(dashboard)/oripa/actions";
 import { formatMyr, cn } from "@/lib/utils";
-import { Shuffle, X, Sparkles } from "lucide-react";
+import { Shuffle, X, Sparkles, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
 import type { OripaTier } from "@prisma/client";
 
 interface SlotInfo {
@@ -35,6 +35,8 @@ type Phase =
   | { name: "reveal"; slotNumber: number; result: Extract<DrawActionResult, { ok: true }>["result"] };
 
 const MIN_ANIMATION_MS = 2000;
+/** Cap the carousel so a 300-pack series doesn't render 300 nodes — the grid covers the rest */
+const CAROUSEL_MAX = 40;
 
 export function OripaDrawExperience({
   seriesId,
@@ -49,9 +51,52 @@ export function OripaDrawExperience({
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>({ name: "idle" });
   const [error, setError] = useState<string | null>(null);
+  const [showGrid, setShowGrid] = useState(false);
 
   const available = useMemo(() => slots.filter((s) => !s.taken), [slots]);
+  const carouselSlots = useMemo(() => available.slice(0, CAROUSEL_MAX), [available]);
   const canDraw = isAuthed && isActive && viewerCredits > 0;
+
+  // ---- carousel centering ----
+  const railRef = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const rafRef = useRef<number>();
+
+  const onRailScroll = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const rail = railRef.current;
+      if (!rail) return;
+      const center = rail.scrollLeft + rail.clientWidth / 2;
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < rail.children.length; i++) {
+        const el = rail.children[i] as HTMLElement;
+        const elCenter = el.offsetLeft + el.offsetWidth / 2;
+        const dist = Math.abs(elCenter - center);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      }
+      setActiveIdx(best);
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  function scrollToIdx(idx: number) {
+    const rail = railRef.current;
+    if (!rail) return;
+    const el = rail.children[Math.max(0, Math.min(idx, rail.children.length - 1))] as HTMLElement | undefined;
+    if (!el) return;
+    rail.scrollTo({
+      left: el.offsetLeft + el.offsetWidth / 2 - rail.clientWidth / 2,
+      behavior: "smooth",
+    });
+  }
 
   function pickSlot(slotNumber: number) {
     if (!canDraw) return;
@@ -89,6 +134,8 @@ export function OripaDrawExperience({
     router.refresh();
   }
 
+  const centeredSlot = carouselSlots[activeIdx];
+
   return (
     <div>
       {/* Credit status bar */}
@@ -112,7 +159,7 @@ export function OripaDrawExperience({
               </div>
             )}
             {viewerCredits > 0 && (
-              <Button onClick={pickRandom} variant="gold" disabled={available.length === 0}>
+              <Button onClick={pickRandom} variant="gold" size="sm" disabled={available.length === 0}>
                 <Shuffle size={16} /> Random pick
               </Button>
             )}
@@ -133,34 +180,123 @@ export function OripaDrawExperience({
         </div>
       )}
 
-      {/* Numbered pack grid */}
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10">
-        {slots.map((s) => (
+      {/* ===== Swipeable pack carousel ===== */}
+      {available.length > 0 && (
+        <div className="relative">
+          {/* Desktop arrows */}
           <button
-            key={s.slotNumber}
             type="button"
-            disabled={s.taken || !canDraw}
-            onClick={() => pickSlot(s.slotNumber)}
-            className={cn(
-              "flex aspect-[3/4] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-all",
-              s.taken
-                ? "border-white/5 bg-slate-900/40 text-slate-700"
-                : canDraw
-                  ? "border-brand-500/40 bg-gradient-to-b from-brand-600/20 to-slate-900 text-brand-200 hover:scale-105 hover:border-brand-400 hover:shadow-[0_0_16px_-4px_rgba(230,57,70,0.5)]"
-                  : "border-white/8 bg-slate-900/70 text-slate-500"
-            )}
+            aria-label="Previous pack"
+            onClick={() => scrollToIdx(activeIdx - 1)}
+            className="absolute -left-2 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-300 hover:text-white sm:flex"
           >
-            {s.taken ? <X size={14} /> : <GemLogo size={14} />}
-            <span className="mt-1">#{s.slotNumber}</span>
+            <ChevronLeft size={18} />
           </button>
-        ))}
+          <button
+            type="button"
+            aria-label="Next pack"
+            onClick={() => scrollToIdx(activeIdx + 1)}
+            className="absolute -right-2 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-300 hover:text-white sm:flex"
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          <div
+            ref={railRef}
+            onScroll={onRailScroll}
+            className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto px-[calc(50%-4.5rem)] py-6"
+          >
+            {carouselSlots.map((s, idx) => {
+              const isCentered = idx === activeIdx;
+              return (
+                <button
+                  key={s.slotNumber}
+                  type="button"
+                  onClick={() => (isCentered ? pickSlot(s.slotNumber) : scrollToIdx(idx))}
+                  className={cn(
+                    "snap-center transition-all duration-300",
+                    isCentered ? "scale-105" : "scale-90 opacity-60"
+                  )}
+                >
+                  <div className={cn(idx % 2 === 0 ? "oripa-float" : "oripa-float oripa-float-delay")}>
+                    <PackVisual
+                      title={seriesTitle}
+                      slotNumber={s.slotNumber}
+                      glow={isCentered && canDraw}
+                      size="carousel"
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* CTA under carousel */}
+          <div className="flex flex-col items-center gap-1">
+            {centeredSlot && (
+              <Button
+                size="lg"
+                disabled={!canDraw}
+                onClick={() => pickSlot(centeredSlot.slotNumber)}
+                className="min-w-[220px]"
+              >
+                <Sparkles size={18} />
+                {canDraw
+                  ? `Open pack #${centeredSlot.slotNumber}`
+                  : isActive
+                    ? "No draws left"
+                    : "Sold out"}
+              </Button>
+            )}
+            <p className="text-xs text-slate-500">
+              Swipe to browse{available.length > CAROUSEL_MAX ? ` (first ${CAROUSEL_MAX} shown)` : ""} · {available.length} packs left
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Collapsible number grid ===== */}
+      <div className="mt-5">
+        <button
+          type="button"
+          onClick={() => setShowGrid((v) => !v)}
+          className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-slate-200"
+        >
+          <Grid3X3 size={15} />
+          {showGrid ? "Hide the full board" : "Pick by number — see the full board"}
+        </button>
+
+        {showGrid && (
+          <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10 md:grid-cols-12">
+            {slots.map((s) => (
+              <button
+                key={s.slotNumber}
+                type="button"
+                disabled={s.taken || !canDraw}
+                onClick={() => pickSlot(s.slotNumber)}
+                className={cn(
+                  "flex aspect-square items-center justify-center rounded-lg border text-[11px] font-bold transition-all",
+                  s.taken
+                    ? "border-white/5 bg-slate-900/40 text-slate-700 line-through"
+                    : canDraw
+                      ? "border-brand-500/40 bg-gradient-to-b from-brand-600/20 to-slate-900 text-brand-200 hover:scale-110 hover:border-brand-400"
+                      : "border-white/8 bg-slate-900/70 text-slate-500"
+                )}
+              >
+                {s.taken ? <X size={12} /> : s.slotNumber}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Confirm sheet */}
       {phase.name === "confirm" && (
         <Modal onClose={() => setPhase({ name: "idle" })}>
           <div className="text-center">
-            <PackVisual title={seriesTitle} slotNumber={phase.slotNumber} />
+            <div className="flex justify-center">
+              <PackVisual title={seriesTitle} slotNumber={phase.slotNumber} size="modal" />
+            </div>
             <h3 className="mt-4 text-lg font-bold text-slate-50">
               Draw pack #{phase.slotNumber}?
             </h3>
@@ -186,7 +322,7 @@ export function OripaDrawExperience({
             <div className="relative">
               <div className="oripa-aura oripa-aura-D absolute inset-[-24px]" />
               <div className="oripa-shake relative">
-                <PackVisual title={seriesTitle} slotNumber={phase.slotNumber} />
+                <PackVisual title={seriesTitle} slotNumber={phase.slotNumber} size="modal" />
               </div>
             </div>
             <p className="mt-6 animate-pulse text-sm font-medium text-slate-300">
@@ -223,13 +359,32 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose?: () 
   );
 }
 
-function PackVisual({ title, slotNumber }: { title: string; slotNumber: number }) {
+function PackVisual({
+  title,
+  slotNumber,
+  glow,
+  size = "modal",
+}: {
+  title: string;
+  slotNumber: number;
+  glow?: boolean;
+  size?: "carousel" | "modal";
+}) {
+  const dims = size === "carousel" ? "h-40 w-28 p-3" : "h-52 w-36 p-4";
   return (
-    <div className="mx-auto flex h-52 w-36 flex-col items-center justify-between rounded-2xl border border-brand-500/30 bg-gradient-to-b from-brand-700 via-brand-800 to-slate-950 p-4 shadow-[0_16px_48px_-12px_rgba(193,18,31,0.6)]">
-      <p className="line-clamp-2 text-center text-[10px] font-bold uppercase tracking-wider text-white/80">
+    <div
+      className={cn(
+        "mx-auto flex flex-col items-center justify-between rounded-2xl border bg-gradient-to-b from-brand-700 via-brand-800 to-slate-950",
+        dims,
+        glow
+          ? "border-brand-400/60 shadow-[0_0_32px_-4px_rgba(230,57,70,0.7)]"
+          : "border-brand-500/30 shadow-[0_16px_48px_-12px_rgba(193,18,31,0.6)]"
+      )}
+    >
+      <p className="line-clamp-2 text-center text-[9px] font-bold uppercase tracking-wider text-white/80">
         {title}
       </p>
-      <GemLogo size={56} />
+      <GemLogo size={size === "carousel" ? 40 : 56} />
       <p className="rounded-full bg-slate-950/60 px-2.5 py-0.5 text-xs font-bold text-white">
         #{slotNumber}
       </p>
@@ -258,7 +413,6 @@ function RevealPanel({
 
   return (
     <div className="flex flex-col items-center text-center">
-      {/* White flash then aura + card */}
       <div className="oripa-flash pointer-events-none absolute inset-0 rounded-3xl bg-white" />
 
       <p className="text-xs font-medium uppercase tracking-widest text-slate-400">

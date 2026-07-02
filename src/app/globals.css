@@ -207,3 +207,15 @@ body {
 .oripa-rise {
   animation: oripa-rise 0.45s ease-out 0.35s both;
 }
+
+/* Gentle idle bob for packs in the carousel */
+@keyframes oripa-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-6px) rotate(1deg); }
+}
+.oripa-float {
+  animation: oripa-float 3s ease-in-out infinite;
+}
+.oripa-float-delay {
+  animation-delay: -1.5s;
+}
